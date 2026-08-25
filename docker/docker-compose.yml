@@ -1,0 +1,35 @@
+name: veleiro-repaso
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: veleiro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: veleiro
+      POSTGRES_PASSWORD: veleiro
+      POSTGRES_DB: veleiro
+    ports:
+      # Host port is 5433, not 5432: a native PostgreSQL install on the host
+      # commonly owns 5432, and the collision surfaces as a confusing
+      # authentication failure (28P01) rather than a connection refusal,
+      # because you silently reach the wrong server. Keep DATABASE_URL in sync.
+      - "5433:5432"
+    volumes:
+      - veleiro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `npm run db:up` passes --wait, so it blocks until this reports healthy.
+      # Without it, `npm run dev` races the container and the first /health
+      # request fails for no interesting reason.
+      test: ["CMD-SHELL", "pg_isready -U veleiro -d veleiro"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      # Generous on purpose. On first run the entrypoint does initdb, starts a
+      # temporary server, creates the database, then restarts - which took well
+      # over 30s on a modest laptop and marked the container unhealthy. Failures
+      # inside start_period do not consume `retries`.
+      start_period: 90s
+
+volumes:
+  veleiro_pgdata:
