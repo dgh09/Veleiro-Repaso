@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HealthResponseSchema } from "@veleiro/shared";
 
-import { pingDb as realPingDb, type DbPing } from "../db/client";
+import { pingDb as realPingDb, type DbPing } from "../db/repositories/system";
 
 export interface HealthDeps {
   pingDb: () => Promise<DbPing>;
