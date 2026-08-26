@@ -3,6 +3,10 @@ import { Hono } from "hono";
 import { createHealthRoute, type HealthDeps } from "./routes/health";
 import { createProjectsRoute } from "./routes/projects";
 import {
+  createTranscriptsRoute,
+  type TranscriptsRouteDeps,
+} from "./routes/transcripts";
+import {
   tenantMiddleware,
   type TenantMiddlewareDeps,
   type TenantVariables,
@@ -11,6 +15,7 @@ import {
 export interface AppDeps {
   health?: HealthDeps;
   tenant?: TenantMiddlewareDeps;
+  transcripts?: TranscriptsRouteDeps;
 }
 
 /**
@@ -28,6 +33,7 @@ export function createApp(deps: AppDeps = {}) {
   // prefix rather than per-route means a new route cannot forget it.
   app.use("/api/*", tenantMiddleware(deps.tenant));
   app.route("/api", createProjectsRoute());
+  app.route("/api", createTranscriptsRoute(deps.transcripts));
 
   return app;
 }

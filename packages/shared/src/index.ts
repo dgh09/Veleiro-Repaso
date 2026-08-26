@@ -17,3 +17,13 @@ export {
   type ChangeType,
 } from "./enums";
 export { TenantContextSchema, type TenantContext } from "./tenant";
+export {
+  ExtractedRequirementSchema,
+  type ExtractedRequirement,
+  ExtractionResultSchema,
+  type ExtractionResult,
+  REVIEW_REASON,
+  ReviewReasonSchema,
+  type ReviewReason,
+  CONFIDENCE_THRESHOLD,
+} from "./extraction";
