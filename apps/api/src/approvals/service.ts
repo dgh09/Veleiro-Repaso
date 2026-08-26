@@ -101,29 +101,49 @@ export interface RejectOptions {
 export async function rejectProposal(options: RejectOptions): Promise<RejectOutcome> {
   const { ctx, proposalId, rejectionReason } = options;
 
-  const audit: AuditEntry = {
-    actorType: "user",
-    actorId: ctx.userId,
-    action: "reject_proposal",
-    entityType: "proposal",
-    entityId: proposalId,
-    before: { status: "pending" },
-    // The stated reason is part of the audit record, not just a column. SPEC
-    // requires rejections to capture why, and this is where a reader looks.
-    after: { status: "rejected", rejectionReason },
-  };
+  // Read first, only to learn which requirement this proposal belongs to so the
+  // audit entries can name it. This is not a check-then-act race: the
+  // compare-and-swap below is still what decides whether anything happens, and
+  // a proposal's requirement_id never changes.
+  const existing = await getProposal(ctx, proposalId);
+  if (existing === undefined) return { kind: "not_found" };
+
+  const audits: AuditEntry[] = [
+    {
+      actorType: "user",
+      actorId: ctx.userId,
+      action: "reject_proposal",
+      entityType: "proposal",
+      entityId: proposalId,
+      before: { status: "pending" },
+      // The stated reason is part of the audit record, not just a column. SPEC
+      // requires rejections to capture why, and this is where a reader looks.
+      after: { status: "rejected", rejectionReason },
+    },
+    {
+      actorType: "user",
+      actorId: ctx.userId,
+      action: "discard_requirement",
+      entityType: "requirement",
+      entityId: existing.requirementId,
+      before: { status: "proposed" },
+      after: { status: "discarded", rejectionReason },
+    },
+  ];
 
   const rejected = await rejectProposalWithAudit(
     ctx,
     proposalId,
     ctx.userId,
     rejectionReason,
-    audit,
+    audits,
   );
 
   if (rejected !== undefined) return { kind: "rejected", proposal: rejected };
 
-  const existing = await getProposal(ctx, proposalId);
-  if (existing === undefined) return { kind: "not_found" };
-  return { kind: "not_pending", proposal: existing };
+  // The swap did not take. Re-read rather than reporting the status we saw
+  // before, which may have moved on while we were building the audit entries.
+  const current = await getProposal(ctx, proposalId);
+  if (current === undefined) return { kind: "not_found" };
+  return { kind: "not_pending", proposal: current };
 }

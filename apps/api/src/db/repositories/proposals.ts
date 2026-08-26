@@ -155,18 +155,29 @@ export async function settleProposalWithAudit(
 }
 
 /**
- * Rejects a pending proposal, atomically, with the human's stated reason.
+ * Rejects a pending proposal, atomically, with the human's stated reason, and
+ * discards the requirement behind it.
  *
  * Same compare-and-swap as the approval claim: a proposal that has already been
- * applied cannot be retroactively rejected. Nothing is written - not even the
+ * applied cannot be retroactively rejected. Nothing is written - not even an
  * audit row - when the swap does not take, because nothing happened.
+ *
+ * The requirement moves to `discarded` rather than staying at `proposed`. SPEC
+ * defines that status and never says what triggers it; this is the only
+ * plausible trigger, and without it a rejected requirement sits in `proposed`
+ * forever, unable to be proposed again. The human's reason survives on the
+ * proposal and in the audit log, so discarding loses no information.
+ *
+ * Two entities change, so two audit rows are written (rule 4). Auditing only
+ * the proposal would leave the requirement's transition invisible to anyone
+ * querying the log by requirement id.
  */
 export async function rejectProposalWithAudit(
   ctx: TenantContext,
   id: string,
   userId: string,
   rejectionReason: string,
-  audit: AuditEntry,
+  audits: readonly AuditEntry[],
 ): Promise<Proposal | undefined> {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -190,7 +201,20 @@ export async function rejectProposalWithAudit(
     const rejected = rows[0];
     if (rejected === undefined) return undefined;
 
-    await tx.insert(auditLog).values(auditValues(ctx, audit));
+    await tx
+      .update(requirements)
+      .set({ status: "discarded" })
+      .where(
+        tenantScope(
+          ctx,
+          requirements.tenantId,
+          eq(requirements.id, rejected.requirementId),
+        ),
+      );
+
+    if (audits.length > 0) {
+      await tx.insert(auditLog).values(audits.map((entry) => auditValues(ctx, entry)));
+    }
 
     return rejected;
   });

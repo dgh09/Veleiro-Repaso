@@ -260,6 +260,70 @@ describe("the approval loop", () => {
     expect(JSON.stringify(rejection?.after)).toContain("Client already has this field");
   });
 
+  it("discards the requirement behind a rejected proposal, and audits that too", async () => {
+    const app = appWith();
+    const proposalId = await extractAndPropose(app);
+
+    await app.request(`/api/proposals/${proposalId}/reject`, {
+      method: "POST",
+      headers: { ...HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ rejectionReason: "Out of scope for this phase" }),
+    });
+
+    // Without this the requirement would sit at `proposed` forever, unable to
+    // be proposed again - a dead end. `discarded` is the status SPEC defines.
+    const listed = await app.request(`/api/transcripts/${TRANSCRIPT_ID}/requirements`, {
+      headers: HEADERS,
+    });
+    const [requirement] = (await listed.json()) as { status: string }[];
+    expect(requirement?.status).toBe("discarded");
+
+    // Two entities changed, so two audit rows (rule 4). Auditing only the
+    // proposal would hide the requirement's transition from anyone querying by
+    // requirement id.
+    const audit = await listAuditLog({
+      tenantId: NORTHWIND.id,
+      userId: NORTHWIND.users[0].id,
+    });
+    const discard = audit.find((row) => row.action === "discard_requirement");
+    expect(discard?.entityType).toBe("requirement");
+    expect(discard?.actorType).toBe("user");
+  });
+
+  it("leaves the requirement discarded, so it cannot be proposed again", async () => {
+    const app = appWith();
+
+    await app.request(`/api/transcripts/${TRANSCRIPT_ID}/extract`, {
+      method: "POST",
+      headers: HEADERS,
+    });
+    const listed = await app.request(`/api/transcripts/${TRANSCRIPT_ID}/requirements`, {
+      headers: HEADERS,
+    });
+    const [requirement] = (await listed.json()) as { id: string }[];
+    const requirementId = requirement?.id ?? "";
+
+    const proposed = await app.request(`/api/requirements/${requirementId}/propose`, {
+      method: "POST",
+      headers: HEADERS,
+    });
+    const { proposal } = (await proposed.json()) as { proposal: { id: string } };
+
+    await app.request(`/api/proposals/${proposal.id}/reject`, {
+      method: "POST",
+      headers: { ...HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ rejectionReason: "No" }),
+    });
+
+    const again = await app.request(`/api/requirements/${requirementId}/propose`, {
+      method: "POST",
+      headers: HEADERS,
+    });
+
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: string }).error).toContain("discarded");
+  });
+
   it("never proposes a requirement that needs review", async () => {
     // The extractor flags this one because its quote is fabricated.
     const app = appWith({
