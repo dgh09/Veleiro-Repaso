@@ -27,3 +27,15 @@ export {
   type ReviewReason,
   CONFIDENCE_THRESHOLD,
 } from "./extraction";
+export {
+  CreateObjectPayloadSchema,
+  CreateFieldPayloadSchema,
+  CreateValidationRulePayloadSchema,
+  UpdateFieldPayloadSchema,
+  ProposalPayloadSchema,
+  type ProposalPayload,
+  ProposalDraftSchema,
+  type ProposalDraft,
+  RejectProposalSchema,
+  type RejectProposal,
+} from "./proposal";

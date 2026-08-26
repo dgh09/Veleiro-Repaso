@@ -7,6 +7,14 @@ import {
   type TranscriptsRouteDeps,
 } from "./routes/transcripts";
 import {
+  createRequirementsRoute,
+  type RequirementsRouteDeps,
+} from "./routes/requirements";
+import {
+  createProposalsRoute,
+  type ProposalsRouteDeps,
+} from "./routes/proposals";
+import {
   tenantMiddleware,
   type TenantMiddlewareDeps,
   type TenantVariables,
@@ -16,6 +24,8 @@ export interface AppDeps {
   health?: HealthDeps;
   tenant?: TenantMiddlewareDeps;
   transcripts?: TranscriptsRouteDeps;
+  requirements?: RequirementsRouteDeps;
+  proposals?: ProposalsRouteDeps;
 }
 
 /**
@@ -34,6 +44,8 @@ export function createApp(deps: AppDeps = {}) {
   app.use("/api/*", tenantMiddleware(deps.tenant));
   app.route("/api", createProjectsRoute());
   app.route("/api", createTranscriptsRoute(deps.transcripts));
+  app.route("/api", createRequirementsRoute(deps.requirements));
+  app.route("/api", createProposalsRoute(deps.proposals));
 
   return app;
 }
