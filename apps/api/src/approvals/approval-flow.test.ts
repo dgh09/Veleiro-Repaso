@@ -450,6 +450,54 @@ describe("the approval loop", () => {
     expect(res.status).toBe(404);
   });
 
+  it("scopes the queue to one project, so another project's changes do not appear", async () => {
+    const app = appWith();
+    const proposalId = await extractAndPropose(app);
+
+    // The proposal belongs to project 0's transcript.
+    const own = await app.request(
+      `/api/proposals?projectId=${NORTHWIND.projects[0].id}`,
+      { headers: HEADERS },
+    );
+    const other = await app.request(
+      `/api/proposals?projectId=${NORTHWIND.projects[1].id}`,
+      { headers: HEADERS },
+    );
+
+    expect(((await own.json()) as { id: string }[]).map((p) => p.id)).toContain(
+      proposalId,
+    );
+    // A proposal has no project of its own; this is the join through
+    // requirements doing the work.
+    expect((await other.json()) as unknown[]).toEqual([]);
+  });
+
+  it("combines the project and status filters", async () => {
+    const app = appWith({ connector: countingConnector(SUCCESS) });
+    const proposalId = await extractAndPropose(app);
+
+    const project = NORTHWIND.projects[0].id;
+
+    const pending = await app.request(
+      `/api/proposals?status=pending&projectId=${project}`,
+      { headers: HEADERS },
+    );
+    expect(((await pending.json()) as { id: string }[]).map((p) => p.id)).toEqual([
+      proposalId,
+    ]);
+
+    await app.request(`/api/proposals/${proposalId}/approve`, {
+      method: "POST",
+      headers: HEADERS,
+    });
+
+    const stillPending = await app.request(
+      `/api/proposals?status=pending&projectId=${project}`,
+      { headers: HEADERS },
+    );
+    expect((await stillPending.json()) as unknown[]).toEqual([]);
+  });
+
   it("rejects an unknown status filter rather than returning everything", async () => {
     const app = appWith();
 

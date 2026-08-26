@@ -7,6 +7,34 @@ import { tenantScope } from "./context";
 
 export type Transcript = typeof transcripts.$inferSelect;
 
+export interface NewTranscript {
+  projectId: string;
+  title: string;
+  content: string;
+  meetingDate: Date | null;
+}
+
+/**
+ * Tenant injected from the context, never taken from the caller. The project is
+ * expected to have been resolved through `getProject` first, which is what
+ * establishes it belongs to this tenant.
+ */
+export async function createTranscript(
+  ctx: TenantContext,
+  input: NewTranscript,
+): Promise<Transcript> {
+  const rows = await db
+    .insert(transcripts)
+    .values({ ...input, tenantId: ctx.tenantId })
+    .returning();
+
+  const created = rows[0];
+  /* c8 ignore next */
+  if (created === undefined) throw new Error("insert into transcripts returned no row");
+
+  return created;
+}
+
 export interface TranscriptWithProject {
   transcript: Transcript;
   projectName: string;

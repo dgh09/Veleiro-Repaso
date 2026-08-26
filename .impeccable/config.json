@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "apps/web/src/components/QuoteInContext.tsx"
+        ],
+        "createdAt": "2026-08-26T21:22:14.575Z",
+        "reason": "text-neutral-900 on bg-yellow-200 is a search-highlight mark; near-black is the correct high-contrast choice on a yellow highlight and white would be unreadable"
+      }
+    ]
+  }
+}

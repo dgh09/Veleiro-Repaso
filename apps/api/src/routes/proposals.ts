@@ -18,9 +18,12 @@ export function createProposalsRoute(
 
   route.get("/proposals", async (c) => {
     const raw = c.req.query("status");
+    // Optional: the UI shows the queue inside a project, and a queue that
+    // silently included another project's changes would be misleading.
+    const projectId = c.req.query("projectId");
 
     if (raw === undefined) {
-      return c.json(await listProposals(c.get("tenant")));
+      return c.json(await listProposals(c.get("tenant"), undefined, projectId));
     }
 
     const status = ProposalStatusSchema.safeParse(raw);
@@ -28,7 +31,7 @@ export function createProposalsRoute(
       return c.json({ error: `Unknown status "${raw}"` }, 400);
     }
 
-    return c.json(await listProposals(c.get("tenant"), status.data));
+    return c.json(await listProposals(c.get("tenant"), status.data, projectId));
   });
 
   route.post("/proposals/:id/approve", async (c) => {

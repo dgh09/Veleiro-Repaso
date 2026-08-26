@@ -61,6 +61,16 @@ export function createTranscriptsRoute(
     return c.json({ requirements: result.value.requirements }, 201);
   });
 
+  route.get("/transcripts/:id", async (c) => {
+    // The UI needs the full content: highlighting a source quote in its
+    // surrounding text is the product's trust mechanism, and it cannot be done
+    // from the quote alone.
+    const transcript = await getTranscript(c.get("tenant"), c.req.param("id"));
+    if (!transcript) return c.json({ error: "Transcript not found" }, 404);
+
+    return c.json(transcript);
+  });
+
   route.get("/transcripts/:id/requirements", async (c) => {
     const ctx = c.get("tenant");
     const id = c.req.param("id");

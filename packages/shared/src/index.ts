@@ -39,3 +39,23 @@ export {
   RejectProposalSchema,
   type RejectProposal,
 } from "./proposal";
+export {
+  ProjectResponseSchema,
+  type ProjectResponse,
+  TranscriptResponseSchema,
+  type TranscriptResponse,
+  RequirementResponseSchema,
+  type RequirementResponse,
+  ProposalResponseSchema,
+  type ProposalResponse,
+  AuditEntryResponseSchema,
+  type AuditEntryResponse,
+  CreateTranscriptSchema,
+  type CreateTranscript,
+  ExtractResponseSchema,
+  ProposeResponseSchema,
+  ApproveResponseSchema,
+  type ApproveResponse,
+  RejectResponseSchema,
+  ApiErrorSchema,
+} from "./api";

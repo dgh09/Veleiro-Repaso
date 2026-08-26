@@ -54,21 +54,45 @@ export async function createProposalWithAudit(
   });
 }
 
+/**
+ * Proposals for one tenant, optionally narrowed to a status and a project.
+ *
+ * The project filter joins through `requirements`, because a proposal has no
+ * project of its own - it belongs to a requirement, and the requirement belongs
+ * to a project. Both sides of the join carry the tenant predicate, so the join
+ * cannot become a way around it.
+ */
 export async function listProposals(
   ctx: TenantContext,
   status?: ProposalStatus,
+  projectId?: string,
 ): Promise<Proposal[]> {
-  return db
-    .select()
+  const statusFilter = status === undefined ? undefined : eq(proposals.status, status);
+
+  if (projectId === undefined) {
+    return db
+      .select()
+      .from(proposals)
+      .where(tenantScope(ctx, proposals.tenantId, statusFilter))
+      .orderBy(desc(proposals.createdAt));
+  }
+
+  const rows = await db
+    .select({ proposal: proposals })
     .from(proposals)
-    .where(
+    .innerJoin(
+      requirements,
       tenantScope(
         ctx,
-        proposals.tenantId,
-        status === undefined ? undefined : eq(proposals.status, status),
+        requirements.tenantId,
+        eq(requirements.id, proposals.requirementId),
+        eq(requirements.projectId, projectId),
       ),
     )
+    .where(tenantScope(ctx, proposals.tenantId, statusFilter))
     .orderBy(desc(proposals.createdAt));
+
+  return rows.map((row) => row.proposal);
 }
 
 export async function getProposal(

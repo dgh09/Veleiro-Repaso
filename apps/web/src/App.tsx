@@ -1,136 +1,176 @@
-import { useCallback, useEffect, useState } from "react";
-import { HealthResponseSchema, type HealthResponse } from "@veleiro/shared";
+import { useCallback, useState } from "react";
+import type { ProjectResponse } from "@veleiro/shared";
+
+import { listProjects } from "./api/client";
+import { IDENTITIES, loadIdentity, saveIdentity, type Identity } from "./identity";
+import { Button, Empty, ErrorBanner, Loading } from "./ui/atoms";
+import { useAsync } from "./ui/useAsync";
+import { AuditTrail } from "./views/AuditTrail";
+import { ProposalQueue } from "./views/ProposalQueue";
+import { TranscriptsTab } from "./views/TranscriptsTab";
 
 /**
- * Every state the client can actually be in gets its own case. No optimistic
- * "ok" while the request is in flight, and a response that does not match the
- * shared schema is a failure, not something to render around (CLAUDE.md: all
- * output is parsed before use).
+ * The whole console: pick who you are, pick a project, then move between the
+ * three things a consultant does - read what was extracted, decide on what was
+ * proposed, and check the record of both.
+ *
+ * Navigation is component state rather than a router. That is a deliberate
+ * limitation (no deep links, no back button) taken because a router would be a
+ * new dependency and CLAUDE.md asks before adding those.
  */
-type HealthState =
-  | { kind: "loading" }
-  | { kind: "healthy"; data: HealthResponse }
-  | { kind: "unhealthy"; data: HealthResponse }
-  | { kind: "unreachable"; message: string };
 
-async function fetchHealth(signal: AbortSignal): Promise<HealthState> {
-  let res: Response;
-  try {
-    res = await fetch("/health", { signal });
-  } catch (cause) {
-    return {
-      kind: "unreachable",
-      message: `Could not reach the API: ${cause instanceof Error ? cause.message : String(cause)}`,
-    };
-  }
+type Tab = "transcripts" | "proposals" | "audit";
 
-  const parsed = HealthResponseSchema.safeParse(await res.json().catch(() => null));
-  if (!parsed.success) {
-    return {
-      kind: "unreachable",
-      message: `The API replied with ${res.status}, but the body did not match HealthResponseSchema.`,
-    };
-  }
-
-  return parsed.data.status === "ok"
-    ? { kind: "healthy", data: parsed.data }
-    : { kind: "unhealthy", data: parsed.data };
-}
+const TABS: { id: Tab; label: string }[] = [
+  { id: "transcripts", label: "Transcripts & requirements" },
+  { id: "proposals", label: "Proposal queue" },
+  { id: "audit", label: "Audit trail" },
+];
 
 export function App() {
-  const [state, setState] = useState<HealthState>({ kind: "loading" });
-  const [reloadKey, setReloadKey] = useState(0);
+  const [identity, setIdentity] = useState<Identity>(loadIdentity);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("transcripts");
+  // Bumped when a proposal is created, so the queue re-reads when it is opened.
+  const [queueKey, setQueueKey] = useState(0);
 
-  const recheck = useCallback(() => {
-    setState({ kind: "loading" });
-    setReloadKey((k) => k + 1);
-  }, []);
+  const load = useCallback(() => listProjects(identity), [identity]);
+  const { state, reload } = useAsync(load, [identity.userId]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
+  function changeIdentity(next: Identity): void {
+    setIdentity(next);
+    saveIdentity(next);
+    // Another tenant's project ids mean nothing here, and holding one would
+    // just produce a 404 on the next read.
+    setProjectId(null);
+  }
 
-    void fetchHealth(controller.signal).then((next) => {
-      if (active) setState(next);
-    });
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [reloadKey]);
+  const projects: ProjectResponse[] = state.kind === "ready" ? state.value : [];
+  const project = projects.find((p) => p.id === projectId) ?? null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 p-8 font-sans">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Veleiro — Discovery to Config</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Phase 0 scaffold. This page reports a real round-trip to Postgres.
-        </p>
+    <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
+      <header className="border-b border-neutral-200 bg-white">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">
+              Veleiro — Discovery to Config
+            </h1>
+            <p className="text-xs text-neutral-600">
+              The agent proposes. You approve. Only then does anything execute.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-neutral-600">
+            {/* Standing in for login: tenant and user come from headers. */}
+            Acting as
+            <select
+              value={identity.userId}
+              onChange={(event) => {
+                const next = IDENTITIES.find((i) => i.userId === event.target.value);
+                if (next) changeIdentity(next);
+              }}
+              className="rounded border border-neutral-300 bg-white px-2 py-1 text-sm text-neutral-900"
+            >
+              {IDENTITIES.map((option) => (
+                <option key={option.userId} value={option.userId}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </header>
 
-      <section aria-live="polite">
-        <StatusPanel state={state} />
-      </section>
+      <main className="mx-auto max-w-5xl px-6 py-6">
+        {state.kind === "loading" ? <Loading what="projects" /> : null}
+        {state.kind === "error" ? (
+          <ErrorBanner message={state.message} onRetry={reload} />
+        ) : null}
 
-      <button
-        type="button"
-        onClick={recheck}
-        className="self-start rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
-      >
-        Check again
-      </button>
-    </main>
-  );
-}
+        {state.kind === "ready" && projects.length === 0 ? (
+          <Empty>
+            No projects for {identity.tenantName}. Run <code>npm run db:seed</code> to
+            create the sample data.
+          </Empty>
+        ) : null}
 
-function StatusPanel({ state }: { state: HealthState }) {
-  switch (state.kind) {
-    case "loading":
-      return <Panel tone="neutral" title="Checking…" body="Waiting for GET /health." />;
+        {state.kind === "ready" && projects.length > 0 ? (
+          <div className="flex flex-col gap-6">
+            <section>
+              <h2 className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+                {identity.tenantName}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {projects.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setProjectId(option.id)}
+                    className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                      option.id === projectId
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 bg-white text-neutral-900 hover:border-neutral-500"
+                    }`}
+                  >
+                    <span className="block font-medium">{option.name}</span>
+                    <span
+                      className={`block text-xs ${
+                        option.id === projectId ? "text-neutral-300" : "text-neutral-500"
+                      }`}
+                    >
+                      {option.clientName}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-    case "healthy":
-      return (
-        <Panel
-          tone="ok"
-          title="API ok · database ok"
-          body="The API answered and completed a query against Postgres."
-        />
-      );
+            {project === null ? (
+              <Empty>Pick a project to begin.</Empty>
+            ) : (
+              <section className="flex flex-col gap-4">
+                <nav className="flex flex-wrap gap-2 border-b border-neutral-200">
+                  {TABS.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => setTab(entry.id)}
+                      className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+                        entry.id === tab
+                          ? "border-neutral-900 font-medium text-neutral-900"
+                          : "border-transparent text-neutral-600 hover:text-neutral-900"
+                      }`}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </nav>
 
-    case "unhealthy":
-      return (
-        <Panel
-          tone="bad"
-          title={`API ok · database ${state.data.db}`}
-          body="The API is running but its database round-trip failed. Try `npm run db:up`."
-        />
-      );
+                {tab === "transcripts" ? (
+                  <TranscriptsTab
+                    identity={identity}
+                    projectId={project.id}
+                    onProposed={() => setQueueKey((k) => k + 1)}
+                  />
+                ) : null}
 
-    case "unreachable":
-      return <Panel tone="bad" title="No usable response" body={state.message} />;
-  }
-}
+                {tab === "proposals" ? (
+                  <ProposalQueue key={queueKey} identity={identity} projectId={project.id} />
+                ) : null}
 
-const TONES = {
-  neutral: "border-neutral-300 bg-neutral-50 text-neutral-800",
-  ok: "border-green-300 bg-green-50 text-green-900",
-  bad: "border-red-300 bg-red-50 text-red-900",
-} as const;
+                {tab === "audit" ? (
+                  <AuditTrail identity={identity} projectId={project.id} />
+                ) : null}
+              </section>
+            )}
+          </div>
+        ) : null}
+      </main>
 
-function Panel({
-  tone,
-  title,
-  body,
-}: {
-  tone: keyof typeof TONES;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className={`rounded-lg border p-4 ${TONES[tone]}`}>
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 text-sm opacity-80">{body}</p>
+      <footer className="mx-auto max-w-5xl px-6 pb-8">
+        <Button onClick={reload}>Reload projects</Button>
+      </footer>
     </div>
   );
 }
