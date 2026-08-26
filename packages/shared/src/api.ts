@@ -127,3 +127,30 @@ export const RejectResponseSchema = z.object({
 
 /** Every error body the API produces has this shape. */
 export const ApiErrorSchema = z.object({ error: z.string() });
+
+/** GET /api/metrics - per tenant, never across tenants. */
+export const TenantMetricsResponseSchema = z.object({
+  llm: z.object({
+    calls: z.number().int(),
+    failedCalls: z.number().int(),
+    inputTokens: z.number().int(),
+    outputTokens: z.number().int(),
+    costUsd: z.string(),
+    avgLatencyMs: z.number().int(),
+  }),
+  requirements: z.object({
+    total: z.number().int(),
+    needsReview: z.number().int(),
+    needsReviewRate: z.number(),
+  }),
+  proposals: z.object({
+    total: z.number().int(),
+    pending: z.number().int(),
+    applied: z.number().int(),
+    failed: z.number().int(),
+    rejected: z.number().int(),
+    approvalRate: z.number(),
+    rejectionRate: z.number(),
+  }),
+});
+export type TenantMetricsResponse = z.infer<typeof TenantMetricsResponseSchema>;

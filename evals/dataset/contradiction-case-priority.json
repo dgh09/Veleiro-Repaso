@@ -1,0 +1,20 @@
+{
+  "id": "contradiction-case-priority",
+  "title": "Client contradicts themselves on priority",
+  "adversarial": "contradiction",
+  "transcript": "Consultant: How do you want to capture how urgent a case is?\nClient: We need a priority field on the case. Make it a picklist with low,\nmedium and high.\nConsultant: Understood, a picklist on case.\nClient: Actually, scratch that. The priority on the case has to be a number\nfrom one to five, because our SLA engine sorts on it numerically.\nConsultant: Those are two different field types for the same field. Which one?\nClient: Honestly, I need to check with the SLA team before we commit.",
+  "expected": [
+    {
+      "crmObject": "Case",
+      "fieldName": "Priority",
+      "note": "The picklist statement."
+    },
+    {
+      "crmObject": "Case",
+      "fieldName": "Priority",
+      "note": "The numeric statement. Both should be extracted; neither should be silently dropped."
+    }
+  ],
+  "expectFlagged": true,
+  "notes": "Both statements must survive extraction and both must be flagged. The detector proves this one: same object and field, incompatible types."
+}

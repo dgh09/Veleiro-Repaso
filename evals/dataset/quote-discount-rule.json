@@ -1,0 +1,15 @@
+{
+  "id": "quote-discount-rule",
+  "title": "Discount approval on quotes",
+  "adversarial": null,
+  "transcript": "Consultant: Are there limits on what a rep can discount?\nClient: There are supposed to be. Anything over twenty percent needs a\ndirector to sign off, but reps just do it anyway and we find out at invoicing.\nConsultant: So you want the system to stop them.\nClient: Yes. A quote with a discount over twenty percent should not be\nsaveable unless a director has approved it. Block the save with a clear message.\nConsultant: Understood, that is a validation rule rather than a field.\nClient: Whatever it is called, make it stop them.",
+  "expected": [
+    {
+      "crmObject": "Quote",
+      "fieldName": null,
+      "note": "A validation rule on Quote, not a field. Object is named, field is not applicable."
+    }
+  ],
+  "expectFlagged": false,
+  "notes": "Tests that an object-level rule is extracted with a null field name rather than an invented one."
+}

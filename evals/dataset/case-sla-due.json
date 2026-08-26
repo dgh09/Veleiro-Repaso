@@ -1,0 +1,14 @@
+{
+  "id": "case-sla-due",
+  "title": "Support SLA deadlines",
+  "adversarial": null,
+  "transcript": "Consultant: How does support know when a case is late?\nClient: They keep a spreadsheet of promised dates. It is a nightmare and it\nis always out of date by Wednesday.\nConsultant: What would you want in the CRM instead?\nClient: We need an SLA due date on the case so the queue can sort by it.\nConsultant: A date and time, or just a date?\nClient: Date and time. An SLA that says Tuesday is not much use without an hour.",
+  "expected": [
+    {
+      "crmObject": "Case",
+      "fieldName": "SlaDueDate",
+      "note": "Date/time field on Case; client specifies the precision."
+    }
+  ],
+  "expectFlagged": false
+}

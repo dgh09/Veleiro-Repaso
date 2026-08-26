@@ -1,0 +1,20 @@
+{
+  "id": "contradiction-semantic-required",
+  "title": "Contradiction of intent, not of type",
+  "adversarial": "contradiction",
+  "transcript": "Consultant: Anything about the case description?\nClient: Yes. The description on the case must be mandatory. Agents close\ncases with an empty description and then nobody knows what happened.\nConsultant: So required on save.\nClient: Required. Definitely required.\nConsultant: Noted.\nClient: Although, for the phone queue, agents have to be able to save the\ncase with the description left blank, or they cannot keep up with the calls.",
+  "expected": [
+    {
+      "crmObject": "Case",
+      "fieldName": "Description",
+      "note": "Required on save."
+    },
+    {
+      "crmObject": "Case",
+      "fieldName": "Description",
+      "note": "Must be savable while blank. Directly opposite intent, same field, same type."
+    }
+  ],
+  "expectFlagged": true,
+  "notes": "KNOWN LIMITATION, and the reason this case is here. The contradiction is semantic, not a type mismatch, so the deterministic detector cannot see it and this case is expected to fail the flagging check. It measures the size of a gap that is documented rather than hidden."
+}

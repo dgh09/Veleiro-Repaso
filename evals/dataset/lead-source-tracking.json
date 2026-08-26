@@ -1,0 +1,14 @@
+{
+  "id": "lead-source-tracking",
+  "title": "Where leads actually come from",
+  "adversarial": null,
+  "transcript": "Consultant: Do you know which channels bring in your best leads?\nClient: We have no idea, and marketing keeps asking. Right now the rep types\nwhatever they remember into the notes field.\nConsultant: So there is no structured source?\nClient: None. We need a lead source field on the lead, as a picklist, with\nweb, referral, event and outbound.\nConsultant: Four values then.\nClient: Four. If we need more later we will add them.",
+  "expected": [
+    {
+      "crmObject": "Lead",
+      "fieldName": "LeadSource",
+      "note": "Picklist on Lead with four values, all stated."
+    }
+  ],
+  "expectFlagged": false
+}

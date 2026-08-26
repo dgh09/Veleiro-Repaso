@@ -58,4 +58,6 @@ export {
   type ApproveResponse,
   RejectResponseSchema,
   ApiErrorSchema,
+  TenantMetricsResponseSchema,
+  type TenantMetricsResponse,
 } from "./api";

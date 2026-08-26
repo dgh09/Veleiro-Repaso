@@ -1,0 +1,20 @@
+{
+  "id": "two-fields-one-call",
+  "title": "Territory and forecast category",
+  "adversarial": null,
+  "transcript": "Consultant: Anything else on the opportunity before we finish?\nClient: Two things. First, we need a territory field on the opportunity so\nwe can split the pipeline report by region.\nConsultant: Picklist of regions?\nClient: Picklist, yes. North, south, and international.\nConsultant: And the second?\nClient: A forecast category on the opportunity as well, commit, best case\nand pipeline. The sales director asks for it every single week.",
+  "expected": [
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "Territory",
+      "note": "First of two requirements in one call."
+    },
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "ForecastCategory",
+      "note": "Second of two; both are stated plainly."
+    }
+  ],
+  "expectFlagged": false,
+  "notes": "Tests recall when one transcript contains more than one requirement."
+}

@@ -1,0 +1,14 @@
+{
+  "id": "renewal-risk-picklist",
+  "title": "Renewal risk triage",
+  "adversarial": null,
+  "transcript": "Consultant: How do account managers decide who to call first at renewal?\nClient: They do not, really. They open the account list and guess.\nConsultant: What would help?\nClient: We would like a renewal risk field on the account, with low, medium\nand high, so account managers can triage the list every Monday.\nConsultant: Those three values exactly?\nClient: Low, medium, high. Nothing more complicated than that.",
+  "expected": [
+    {
+      "crmObject": "Account",
+      "fieldName": "RenewalRisk",
+      "note": "Picklist on Account with three values the client names explicitly."
+    }
+  ],
+  "expectFlagged": false
+}

@@ -1,0 +1,14 @@
+{
+  "id": "renewal-object",
+  "title": "Renewals as their own record",
+  "adversarial": null,
+  "transcript": "Consultant: How do you handle a renewal today?\nClient: We clone the original opportunity, which is wrong, because then the\nreporting counts it as new business and the numbers are inflated.\nConsultant: So a renewal is not really an opportunity.\nClient: It is its own thing. We need a renewal record type of its own,\nseparate from opportunity, linked back to the account.\nConsultant: A new object then.\nClient: A new object. That is exactly what we need.",
+  "expected": [
+    {
+      "crmObject": "Renewal",
+      "fieldName": null,
+      "note": "A new object, not a field. Field name must be null."
+    }
+  ],
+  "expectFlagged": false
+}

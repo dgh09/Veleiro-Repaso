@@ -1,0 +1,15 @@
+{
+  "id": "tangent-office-move",
+  "title": "One requirement buried in a long tangent",
+  "adversarial": "tangent",
+  "transcript": "Consultant: Before we start, how is the move going?\nClient: Do not ask. The new floor is not ready, the fibre was supposed to be\ninstalled last Tuesday and the contractor has stopped answering the phone.\nConsultant: That sounds painful.\nClient: We have forty people hot-desking in a room built for fifteen. The\nfacilities team wants a booking spreadsheet for the meeting rooms, and there\nis a whole argument about whether the standing desks come with us or not.\nConsultant: I will not add that to the CRM backlog.\nClient: Please do not. The only CRM thing I have today is that we need a\nnext step field on the opportunity, free text, so reps write down what they\npromised the customer.\nConsultant: Free text, on the opportunity. Got it.\nClient: That is it. The rest of my problems are architectural.",
+  "expected": [
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "NextStep",
+      "note": "The only configuration requirement in the call."
+    }
+  ],
+  "expectFlagged": false,
+  "notes": "Desk bookings, fibre installation and standing desks are not CRM requirements. Anything extracted from the tangent is a false positive."
+}

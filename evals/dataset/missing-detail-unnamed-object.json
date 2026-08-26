@@ -1,0 +1,15 @@
+{
+  "id": "missing-detail-unnamed-object",
+  "title": "A field with no object named",
+  "adversarial": "missing_detail",
+  "transcript": "Consultant: Anything else outstanding?\nClient: We need somewhere to record the contract end date. It keeps getting\nlost between the sales team and finance.\nConsultant: Which record should it live on?\nClient: That is a good question. It might belong on the account, or on the\nopportunity, or on the new renewal thing we discussed. I genuinely do not know.\nConsultant: We will need to decide that before building it.\nClient: Agreed. Write it down, but do not pick for me.",
+  "expected": [
+    {
+      "crmObject": null,
+      "fieldName": "ContractEndDate",
+      "note": "The field is real; the object is explicitly undecided and must not be guessed."
+    }
+  ],
+  "expectFlagged": true,
+  "notes": "The client says outright not to choose. Picking an object here is the invention the confidence rule exists to catch."
+}

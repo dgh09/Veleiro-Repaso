@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  TenantMetricsResponseSchema,
   ApproveResponseSchema,
   AuditEntryResponseSchema,
   CreateTranscriptSchema,
@@ -12,6 +13,7 @@ import {
   RequirementResponseSchema,
   TranscriptResponseSchema,
   type ApproveResponse,
+  type TenantMetricsResponse,
   type AuditEntryResponse,
   type ProjectResponse,
   type ProposalResponse,
@@ -212,4 +214,10 @@ export function listProjectAudit(
     `/api/projects/${projectId}/audit`,
     z.array(AuditEntryResponseSchema),
   );
+}
+
+export function getMetrics(
+  identity: Identity,
+): Promise<ApiResult<TenantMetricsResponse>> {
+  return request(identity, "/api/metrics", TenantMetricsResponseSchema);
 }

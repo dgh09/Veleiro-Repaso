@@ -6,6 +6,7 @@ import { IDENTITIES, loadIdentity, saveIdentity, type Identity } from "./identit
 import { Button, Empty, ErrorBanner, Loading } from "./ui/atoms";
 import { useAsync } from "./ui/useAsync";
 import { AuditTrail } from "./views/AuditTrail";
+import { MetricsPanel } from "./views/MetricsPanel";
 import { ProposalQueue } from "./views/ProposalQueue";
 import { TranscriptsTab } from "./views/TranscriptsTab";
 
@@ -97,6 +98,8 @@ export function App() {
 
         {state.kind === "ready" && projects.length > 0 ? (
           <div className="flex flex-col gap-6">
+            <MetricsPanel identity={identity} />
+
             <section>
               <h2 className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
                 {identity.tenantName}

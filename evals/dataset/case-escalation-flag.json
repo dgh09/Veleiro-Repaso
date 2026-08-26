@@ -1,0 +1,14 @@
+{
+  "id": "case-escalation-flag",
+  "title": "Escalated cases",
+  "adversarial": null,
+  "transcript": "Consultant: How does a case get escalated?\nClient: Someone shouts in the team channel. That is the process.\nConsultant: And in the CRM?\nClient: Nothing. We need an escalated checkbox on the case so the manager\nqueue can filter on it.\nConsultant: A simple yes or no.\nClient: Yes or no. We do not need levels, we tried that before and nobody used it.",
+  "expected": [
+    {
+      "crmObject": "Case",
+      "fieldName": "Escalated",
+      "note": "Checkbox on Case; client explicitly rejects a more complex design."
+    }
+  ],
+  "expectFlagged": false
+}

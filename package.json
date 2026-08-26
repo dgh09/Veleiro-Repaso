@@ -23,7 +23,8 @@
     "db:generate": "npm run db:generate -w @veleiro/api",
     "db:migrate": "npm run db:migrate -w @veleiro/api",
     "db:seed": "npm run db:seed -w @veleiro/api",
-    "llm:smoke": "npm run llm:smoke -w @veleiro/api"
+    "llm:smoke": "npm run llm:smoke -w @veleiro/api",
+    "eval": "npm run eval -w @veleiro/api"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

@@ -12,8 +12,9 @@ them before anything is applied.
 Read [`CLAUDE.md`](./CLAUDE.md) for the architectural invariants and
 [`SPEC.md`](./SPEC.md) for the phased build plan.
 
-**Status: Phase 1 complete.** The schema exists and every read is tenant-scoped.
-There is no agent and no LLM call yet.
+**Status: complete.** A transcript goes in one end and an applied configuration
+change comes out the other, with a human decision and an audit row at every
+step.
 
 ---
 
@@ -46,6 +47,8 @@ against Postgres.
 | `npm run db:generate` | Generate a migration from the schema |
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:seed` | Insert the two demo tenants (idempotent) |
+| `npm run llm:smoke` | One real call to the configured model, to prove the wire works |
+| `npm run eval` | Score the Extractor against the golden dataset |
 | `npm run typecheck` | `tsc --noEmit` across all workspaces |
 | `npm run test` | Vitest |
 
@@ -55,7 +58,61 @@ against Postgres.
 apps/api          Hono server, agents, DB access
 apps/web          React approval UI
 packages/shared   Zod schemas and types shared by api and web
+evals             Golden dataset and committed run reports
 docker            docker-compose.yml
+```
+
+The eval *runner* lives in `apps/api/src/evals/` rather than in `/evals`, which
+deviates from SPEC's layout. It has to import the Extractor, and `apps/api` is a
+private workspace with no library export surface; making one exist purely so the
+harness could import through it would be worse than the deviation. The dataset
+and the reports — the parts anyone reads or diffs — are where SPEC puts them.
+
+## Architecture
+
+```
+   consultant
+       |
+       v
+  +----------------------------+
+  |  React UI (apps/web)       |  parses every response with the shared schema
+  +----------------------------+
+       |  X-Tenant-Id / X-User-Id      (the auth stub)
+       v
+  +----------------------------+
+  |  Hono API (apps/api)       |
+  |  tenant middleware         |  401 no headers / 403 user not in tenant
+  +----------------------------+
+       |
+       v
+  +----------------------------+
+  |  repositories/             |  the ONLY place tenant_id is applied
+  +----------------------------+
+       |
+       v
+  +----------------------------+
+  |  PostgreSQL                |
+  +----------------------------+
+
+  agents (propose)                    approvals (execute)
+  +---------------------+             +---------------------+
+  |  Extractor          |             |  approvals/service  |
+  |  Proposer           |             |         |           |
+  +---------------------+             +---------|-----------+
+       |                                        v
+       |  writes rows                  +---------------------+
+       |  status: pending              |  connectors/stub    |--> "CRM"
+       v                               +---------------------+
+  +---------------------+                       ^
+  |  proposals table    |-----------------------+
+  +---------------------+   only after a human clicks approve
+
+  Note what is missing: there is no arrow from an agent to the connector.
+  The agent modules hold no reference to one. That is CLAUDE.md's first rule
+  made checkable by reading imports rather than by tracing call sites.
+
+  Every model call, success or failure, writes a row to llm_calls.
+  Every state change writes a row to audit_log, in the same transaction.
 ```
 
 ---
@@ -115,6 +172,62 @@ To go fully offline, install Ollama natively (not in Compose — GPU passthrough
 on Windows needs WSL2 plus the NVIDIA Container Toolkit), then switch the
 commented block in `.env`. Note that 4 GB of VRAM caps you at roughly a 3B
 model, which is weak at the verbatim quoting Phase 3 depends on.
+
+**No agent framework, on purpose.** The loop in
+`apps/api/src/agents/runtime/loop.ts` is about a hundred and fifty lines: send
+the conversation, run any tool calls, append the results, stop at a hard cap.
+Writing it by hand is part of the brief, but the practical argument is that
+every decision about what happens when a model misbehaves is visible in one
+readable file — how many times it may correct a malformed tool argument, what
+happens when it invents a tool name, what a failure returns. Those are the
+decisions that matter in a supervised system, and in a framework they are
+someone else's defaults.
+
+**Quote verification is code, and it is normalised.** SPEC says the check must
+not be a prompt instruction, and the reason is simple: a model asked whether its
+own evidence is real will say yes. But SPEC's wording reads as an exact
+substring test, and implemented that way it would have been worse than useless.
+A transcript wraps lines; a model re-emitting a span through JSON collapses
+those newlines to spaces, folds typographic quotes to ASCII, and fixes
+capitalisation. Every one of those honest extractions would have been recorded
+as a hallucination, and the hallucination-rate metric would have measured
+Unicode rather than truthfulness. So whitespace, punctuation and case are folded
+before comparison, while the offsets returned still index the original text —
+which is what lets the UI highlight the real characters. It caught a genuine
+stitch in the eval run: the model had joined two separate passages of one
+transcript into a single quote.
+
+**Contradiction detection covers only the half that is decidable.** SPEC asks
+for "same object+field, incompatible types or opposite intent". The first is
+provable. The second is not: deciding that "make the description required" and
+"agents must be able to save it blank" conflict is itself a language-
+understanding judgement, and handing it back to the model that produced both
+statements is the move SPEC forbids everywhere else. So the detector proves type
+mismatches and semantic contradiction is documented as out of scope, caught by
+the human in the queue. The golden dataset contains a case for it that the
+system is expected to fail, so the size of that gap is a number rather than a
+footnote.
+
+**Risk is assigned by rule, and the prompt never mentions risk.** Risk is what a
+human uses to decide how much attention a change deserves. A model assigning its
+own risk is grading its own homework, and the failure is silent: a confidently
+worded "low risk" on a change that retypes a column reads exactly like a correct
+one. `agents/proposer/risk.ts` decides from the payload alone, so the same
+change described in alarming or reassuring prose scores identically — there is a
+test that asserts precisely that.
+
+**Approving twice applies once, and that is a database guarantee.** The status
+predicate lives inside the `UPDATE`, so Postgres picks the winner between two
+concurrent approvals and exactly one comes back with a row. Reading the status
+and then updating would leave a window where both callers believe they won and
+the connector runs twice. The test asserts it against a connector that counts
+its calls, not against the status column — the column looks identical either
+way.
+
+**The stored payload is re-parsed on the way out of the database.** It is
+`jsonb`, so it arrives as `unknown`, and it began as model output. Trusting it
+because it was valid when written would mean the one component that touches a
+real system runs on unvalidated data.
 
 ## Tenant isolation: repository layer vs row-level security
 
@@ -186,6 +299,137 @@ go. A well-formed pair whose user does not belong to the tenant returns 403:
 without that check, any caller could pair their own tenant id with another
 tenant's user id and write a forged actor into the audit log.
 
+## Evaluation
+
+`npm run eval` runs the Extractor against 18 hand-written transcripts in
+`evals/dataset/` and writes a timestamped report to `evals/reports/`. Both runs
+below are committed, so the comparison is reproducible rather than described.
+
+Requirements are matched on **object + field**, as SPEC specifies — titles and
+wording are the model's to choose. Names are compared with casing, separators
+and the `__c` suffix removed, because `SLA_Due_Date` and `SlaDueDate` are the
+same answer in different clothes.
+
+| | `extractor.v1` | `extractor.degraded.v1` |
+|---|---|---|
+| Precision | 100% | 100% |
+| Recall | 100% | 100% |
+| F1 | 100% | 100% |
+| Hallucinated quotes | **10%** | **20%** |
+| Adversarial flagging | 50% | 50% |
+| Flags on clean cases | **16.7%** | **33.3%** |
+| Agent failures | 0 | 0 |
+| Tokens | 18,686 in / 4,105 out | 11,612 in / 3,633 out |
+| Avg latency | 1,205 ms | 919 ms |
+
+### What these numbers mean, and what they do not
+
+**The 100% is not the interesting number, and it is not evidence of much.**
+Eighteen cases, written by the same person who wrote the prompt, on a matcher
+that was corrected after seeing a first run. It says the model finds the right
+object and field on transcripts of this shape. It does not generalise to a real
+two-hour call.
+
+**Precision and recall are saturated, which makes them useless as a regression
+detector here.** That is the honest reading of the degraded column. SPEC's
+acceptance criterion is that deliberately worsening the prompt makes the score
+drop measurably, and it does — but not on the headline metric. A two-line prompt
+still finds the right field on these transcripts, so precision and recall cannot
+tell the two prompts apart. Harder cases, or transcripts with several plausible
+near-misses, would be needed before those two numbers could detect anything.
+
+**The hallucination rate is the metric that actually works.** The degraded
+prompt differs from the real one mainly by having no verbatim-quote instruction,
+and the hallucinated-quote rate doubled, 10% to 20%, exactly as that removal
+predicts. That is the number to watch when the prompt changes.
+
+**Adversarial flagging did not move, because those failures are structural.**
+Both prompts miss the same three cases, and no prompt fixes them: two are the
+confidence problem described under failure modes, and one is the semantic
+contradiction the detector is documented as unable to see.
+
+**The flags on clean cases were correct flags.** In the `extractor.v1` run they
+were `case-sla-due` and `contact-preferred-channel`, and in both the model had
+produced a quote that was not verbatim — one stitched from two separate passages
+of the transcript. The guardrail caught the model doing exactly the thing it
+exists to catch. The metric is named `flagsOnCleanCasesRate` rather than
+"false alarm rate" for that reason: it is a count of clean transcripts that
+still needed a human, not an accusation that the flag was wrong.
+
+To reproduce, with the database running:
+
+```bash
+npm run eval                                        # the current prompt
+npm run eval -w @veleiro/api -- --prompt degraded   # the control
+```
+
+Flags have to go to the workspace script; npm swallows them on the root one.
+
+## Known failure modes
+
+Named specifically, because a list of weaknesses that could describe any system
+is not a list of weaknesses.
+
+**Confidence does not measure what the flagging rule needs it to.** The rule is
+`confidence < 0.6 -> needs_review`, and the eval shows it does not catch
+under-specification. On the case where the client says "we need the stage to be
+a proper picklist" and then explicitly refuses to name the values, the model
+returned **0.95** — and it is not wrong to. It is confident about *what* was
+asked; the missing part is a *detail*, and a single scalar cannot express "sure
+about the request, unsure about the specifics". Two of the three missed
+adversarial flags are this one problem. The fix is not a different threshold, it
+is a second signal: ask the model to enumerate what it had to assume, and flag
+on a non-empty list rather than on a number.
+
+**Semantic contradiction is not detected at all.** Documented above and measured
+by a dataset case that is expected to fail. Same object, same field, opposite
+intent, no type mismatch — the detector cannot see it and nothing else will
+either until a human reads the queue.
+
+**The prompt-injection defence is untested against a real attacker.** The
+transcript arrives delimited, the delimiters are stripped from its content so it
+cannot close its own block, and the prompt says its contents are never
+instructions. The eval case passes. But that case is one instruction I wrote,
+and someone who wanted through would not use the phrasing I thought of.
+Delimiters are a mitigation, not a boundary.
+
+**Nothing bounds the transcript size.** A two-hour call pasted in whole would be
+sent to the model in one request. There is no chunking and no length check, so
+the failure at some size is a provider error rather than a degraded answer. The
+demo transcripts are a few hundred characters and this has never been hit.
+
+**Extraction and proposal are one call each, with no queue.** `POST /extract`
+holds the HTTP request open for the length of a model call. That is fine for one
+consultant and would not survive ten; it wants a job queue and a polling
+endpoint, and the UI already models "loading" honestly enough to accommodate one.
+
+**Re-extraction and re-proposal have no path.** Both refuse with a 409 rather
+than silently duplicating, which is the safe half of the answer. The useful half
+— running a transcript again after the prompt improves — does not exist.
+Rejecting a proposal discards its requirement, so a rejection is terminal;
+re-proposing with the human's stated reason fed back to the model is the obvious
+next feature and is not built.
+
+**The connector is a stub, and the interesting failures are the ones it cannot
+have.** It cannot be half-applied, rate-limited, or succeed and then be rolled
+back by someone else. A proposal stuck in `approved` because the process died
+between the claim and the apply is possible today and has no recovery path;
+against a real CRM that would need reconciliation, not just a retry.
+
+**The cost figure is zero because the rate table says so.** `cost_usd` is
+computed from a per-model rate table, and every entry in it is 0 because the
+project runs on a free tier. That is the true number, not a placeholder, but it
+means the cost metric has never been exercised against a non-zero rate.
+
+**Test-suite flakiness is environmental and only partly mitigated.** The full
+suite intermittently fails with `Connection terminated unexpectedly`, in a
+different file each time. Postgres logs no fault and never approaches
+`max_connections`: Docker Desktop's port forwarding on Windows drops the socket
+under host I/O pressure. Migrations retry, because Drizzle knows which ones
+already ran; ordinary queries deliberately do not, because re-running a
+half-committed write is worse than the failure it would hide. Re-running the
+suite is the workaround.
+
 ## Verifying isolation by hand
 
 With the seed loaded and the API running:
@@ -206,7 +450,4 @@ curl -i -H "X-Tenant-Id: $A_T" -H "X-User-Id: $B_U"      localhost:3001/api/proj
 Another tenant's row is indistinguishable from a missing one, deliberately:
 "not found" must not become an existence oracle for other tenants' ids.
 
----
 
-Sections on architecture, evaluation results and known failure modes arrive with
-Phase 7.

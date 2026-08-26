@@ -10,6 +10,7 @@ import {
   createRequirementsRoute,
   type RequirementsRouteDeps,
 } from "./routes/requirements";
+import { createMetricsRoute } from "./routes/metrics";
 import {
   createProposalsRoute,
   type ProposalsRouteDeps,
@@ -46,6 +47,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route("/api", createTranscriptsRoute(deps.transcripts));
   app.route("/api", createRequirementsRoute(deps.requirements));
   app.route("/api", createProposalsRoute(deps.proposals));
+  app.route("/api", createMetricsRoute());
 
   return app;
 }

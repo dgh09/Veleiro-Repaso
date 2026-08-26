@@ -1,0 +1,9 @@
+{
+  "id": "no-requirements",
+  "title": "A call with nothing to configure",
+  "adversarial": null,
+  "transcript": "Consultant: Thanks for making time. This one is mostly about scheduling.\nClient: No problem. We are trying to work out when the team is free for training.\nConsultant: How many people would attend?\nClient: About twelve, from sales and support. The second week of March works\nfor most of them, though two people are on leave.\nConsultant: I will send some options. Anything blocking on your side?\nClient: Only the budget approval, and that is with finance until Friday.\nConsultant: Understood. Nothing to change in the system from this one.\nClient: No, nothing today. We will talk configuration next time.",
+  "expected": [],
+  "expectFlagged": false,
+  "notes": "An empty extraction is the correct answer. Anything returned here is a false positive and costs precision."
+}

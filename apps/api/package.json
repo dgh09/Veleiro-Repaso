@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "llm:smoke": "tsx src/llm/smoke.ts"
+    "llm:smoke": "tsx src/llm/smoke.ts",
+    "eval": "tsx src/evals/run.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

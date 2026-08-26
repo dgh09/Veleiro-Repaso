@@ -1,0 +1,14 @@
+{
+  "id": "account-health-score",
+  "title": "Customer health scoring",
+  "adversarial": null,
+  "transcript": "Consultant: You mentioned churn earlier. How do you spot it coming?\nClient: Too late, usually. Someone notices the support tickets piling up.\nConsultant: Is there any score today?\nClient: No. We want a health score on the account, a number from zero to one\nhundred, that our analytics team will write into the CRM every night.\nConsultant: So the CRM just stores it, it does not calculate it.\nClient: Correct. We calculate it elsewhere and push it in.",
+  "expected": [
+    {
+      "crmObject": "Account",
+      "fieldName": "HealthScore",
+      "note": "Numeric field on Account, populated externally."
+    }
+  ],
+  "expectFlagged": false
+}

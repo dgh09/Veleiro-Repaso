@@ -1,0 +1,14 @@
+{
+  "id": "close-date-required",
+  "title": "Forecast accuracy on Opportunity",
+  "adversarial": null,
+  "transcript": "Consultant: Walk me through how the team forecasts today.\nClient: Honestly it is guesswork. Reps enter the deal but half of them leave\nthe close date blank, so the pipeline report is meaningless past this month.\nConsultant: So close date is optional right now?\nClient: It is optional and it should not be. The close date on the\nopportunity must be required before anyone can save the record.\nConsultant: Understood. Anything about the format?\nClient: No, a normal date is fine. We just need it filled in.",
+  "expected": [
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "CloseDate",
+      "note": "Client states plainly that close date must be required on Opportunity."
+    }
+  ],
+  "expectFlagged": false
+}

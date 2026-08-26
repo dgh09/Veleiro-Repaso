@@ -1,0 +1,14 @@
+{
+  "id": "contact-preferred-channel",
+  "title": "How customers want to be contacted",
+  "adversarial": null,
+  "transcript": "Consultant: Any compliance pressure on outreach?\nClient: Some. People tell us they prefer email or phone and we lose it.\nConsultant: Lose it where?\nClient: It goes in a note and nobody reads notes. We need a preferred\ncontact channel on the contact record, picklist, email or phone or none.\nConsultant: Including an explicit none.\nClient: Especially the none. That is the one that gets us in trouble.",
+  "expected": [
+    {
+      "crmObject": "Contact",
+      "fieldName": "PreferredContactChannel",
+      "note": "Picklist on Contact including an explicit opt-out value. Named as the client named it - 'preferred contact channel' - after the first run showed the ground truth had abbreviated it."
+    }
+  ],
+  "expectFlagged": false
+}

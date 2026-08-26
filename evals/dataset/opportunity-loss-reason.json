@@ -1,0 +1,14 @@
+{
+  "id": "opportunity-loss-reason",
+  "title": "Why deals are lost",
+  "adversarial": null,
+  "transcript": "Consultant: When a deal is lost, what gets recorded?\nClient: The stage moves to closed lost and that is the end of it.\nConsultant: No reason captured?\nClient: Nothing structured. Sales leadership wants a loss reason on the\nopportunity, a picklist with price, timing, competitor and no decision.\nConsultant: Four options.\nClient: Four. They argued about it for a month, so please do not add a fifth.",
+  "expected": [
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "LossReason",
+      "note": "Picklist on Opportunity; the four values are explicitly agreed."
+    }
+  ],
+  "expectFlagged": false
+}

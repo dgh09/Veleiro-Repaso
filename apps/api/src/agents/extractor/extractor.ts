@@ -21,6 +21,7 @@ import type { LlmClient, LlmMessage } from "../../llm/types";
 import type { AgentResult } from "../runtime/errors";
 import { completeStructured } from "../runtime/structured";
 import { EXTRACTOR_PROMPT } from "../prompts/extractor.v1";
+import type { Prompt } from "../prompts/types";
 import { findContradictions } from "./contradictions";
 import { verifySourceQuote } from "./verify-quote";
 
@@ -44,6 +45,15 @@ export interface ExtractOptions {
   transcript: Transcript;
   /** Injectable so tests drive a canned model response instead of the network. */
   client?: LlmClient;
+  /**
+   * Which prompt to run. Defaults to the current one.
+   *
+   * Injectable because Phase 6 has to show that a worse prompt produces a worse
+   * score - a claim that means nothing unless the harness can actually run one.
+   * The version string still travels into `llm_calls.prompt_version`, so a
+   * degraded run is distinguishable in the log rather than silently mixed in.
+   */
+  prompt?: Prompt;
 }
 
 export interface ExtractOutcome {
@@ -132,16 +142,18 @@ export async function runExtractor(
 ): Promise<AgentResult<ExtractOutcome>> {
   const { ctx, transcript } = options;
 
+  const prompt = options.prompt ?? EXTRACTOR_PROMPT;
+
   const client =
     options.client ??
     createAgentLlmClient({
       ctx,
       agent: EXTRACTOR_AGENT,
-      promptVersion: EXTRACTOR_PROMPT.version,
+      promptVersion: prompt.version,
     });
 
   const messages: LlmMessage[] = [
-    { role: "system", content: EXTRACTOR_PROMPT.system },
+    { role: "system", content: prompt.system },
     { role: "user", content: transcriptBlock(transcript) },
   ];
 
@@ -149,7 +161,10 @@ export async function runExtractor(
     client,
     schema: ExtractionResultSchema,
     messages,
-    request: { maxTokens: 4_000 },
+    // Generous against the ~450 tokens a real extraction uses, but not so
+    // generous that a rate limiter reserving max_completion_tokens would count
+    // this call as most of a minute'"'"'s 8K budget.
+    request: { maxTokens: 2_000 },
   });
 
   if (!result.ok) return result;
@@ -191,7 +206,7 @@ export async function runExtractor(
     entityId: transcript.id,
     before: null,
     after: {
-      promptVersion: EXTRACTOR_PROMPT.version,
+      promptVersion: prompt.version,
       extracted: drafts.length,
       needsReview,
       requirementIds: ids,

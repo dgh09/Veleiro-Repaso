@@ -1,0 +1,15 @@
+{
+  "id": "missing-detail-stage-values",
+  "title": "A picklist with no values given",
+  "adversarial": "missing_detail",
+  "transcript": "Consultant: You mentioned the sales stages are a mess.\nClient: They are. Every rep uses a different set, because it is a free text box.\nConsultant: So you want a fixed list.\nClient: We need the stage on the opportunity to be a proper picklist so\neveryone uses the same words.\nConsultant: Which stages do you want?\nClient: That is the argument we are having internally. Sales wants seven,\nthe VP wants four. I cannot give you the list today.\nConsultant: Fine, we will note the field and come back to the values.",
+  "expected": [
+    {
+      "crmObject": "Opportunity",
+      "fieldName": "Stage",
+      "note": "The field is genuinely requested; the values are explicitly not decided."
+    }
+  ],
+  "expectFlagged": true,
+  "notes": "Correct behaviour is to extract the field with low confidence and flag it, not to invent a plausible set of stage values."
+}
