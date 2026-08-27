@@ -34,9 +34,39 @@ npm run db:seed
 npm run dev
 ```
 
-Then open <http://localhost:5173>. The page reports the result of
-`GET /health`, which is answered only after the API completes an actual query
-against Postgres.
+Then open <http://localhost:5173>.
+
+### The walkthrough
+
+The seed creates two consulting firms with two projects each, so there is
+something to click the moment the page loads.
+
+1. **Pick who you are.** The *Acting as* selector in the header is the
+   authentication stub: it sets the `X-Tenant-Id` / `X-User-Id` pair on every
+   request. Switching between Ana (Northwind) and Chika (Meridian) is the
+   fastest way to watch tenant isolation work — the other firm's projects do
+   not appear, because the repository layer filtered them out before the API
+   ever formed a response.
+2. **Pick a project.** Every seeded project already carries one discovery
+   transcript, and *Transcripts & requirements* takes a pasted one of your own.
+3. **Run the Extractor** with *Extract requirements*. This is a real model call
+   and takes a second or two. What comes back is a list of requirements, each
+   with the verbatim quote it came from — click one to see it highlighted in
+   the transcript itself.
+4. **Look at what is flagged.** Anything `needs_review` sorts to the top with
+   the reason attached, and has no *Propose* button. A requirement whose quote
+   could not be found in the transcript cannot become a proposal at all; that
+   is the guardrail, not a UI state.
+5. **Propose a change** from a clean requirement. The result is a row in the
+   queue, never a change to anything.
+6. **Decide, in the *Proposal queue* tab.** *Approve* runs the connector and is
+   the only path in the system that does. *Reject* requires a typed reason
+   before the button enables.
+7. **Read the record** in *Audit trail*: who did what, when, and what the value
+   was before and after — agent actions and human decisions in the same list.
+
+The panel above the project picker is `GET /api/metrics` for the current
+tenant: model calls, tokens, spend, and the approval and rejection rates.
 
 | Script | What it does |
 |---|---|
@@ -44,6 +74,7 @@ against Postgres.
 | `npm run db:up` | Start Postgres and wait until its healthcheck passes |
 | `npm run db:down` | Stop Postgres, keep the data |
 | `npm run db:reset` | Destroy the volume and start clean |
+| `npm run db:logs` | Follow the Postgres container log |
 | `npm run db:generate` | Generate a migration from the schema |
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:seed` | Insert the two demo tenants (idempotent) |
@@ -117,6 +148,47 @@ and the reports — the parts anyone reads or diffs — are where SPEC puts them
 
 ---
 
+## The API
+
+`/health` is public. Everything under `/api` requires the `X-Tenant-Id` and
+`X-User-Id` header pair: missing headers are 401, a user who does not belong to
+the tenant is 403, and another tenant's row is 404 rather than 403 — see
+[Verifying isolation by hand](#verifying-isolation-by-hand) for why.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/health` | Liveness, answered only after a real query against Postgres |
+| GET | `/api/projects` | The calling tenant's projects |
+| GET | `/api/projects/:id` | One project |
+| GET | `/api/projects/:id/transcripts` | Transcripts in a project |
+| POST | `/api/projects/:id/transcripts` | Upload a transcript (201) |
+| GET | `/api/projects/:id/audit` | The audit trail for a project |
+| GET | `/api/transcripts/:id` | One transcript, full text — the UI highlights quotes in it |
+| GET | `/api/transcripts/:id/requirements` | What the Extractor produced |
+| POST | `/api/transcripts/:id/extract` | **Runs the Extractor** (201) |
+| POST | `/api/requirements/:id/propose` | **Runs the Proposer** (201) |
+| GET | `/api/proposals` | The queue; `?status=` and `?projectId=` filter it |
+| POST | `/api/proposals/:id/approve` | **The only path that reaches the connector** |
+| POST | `/api/proposals/:id/reject` | Requires a reason in the body |
+| GET | `/api/metrics` | This tenant's model usage, spend, and decision rates |
+
+Three status codes carry most of the design:
+
+**409 means "this would duplicate or launder something".** Extracting a
+transcript twice, proposing a requirement twice, proposing one that is flagged
+`needs_review`, or proposing one that was discarded. None of these are made
+into a silent no-op, because none of them have a key that would make a second
+run idempotent — the model does not return the same text twice.
+
+**502 means the model failed, not the caller.** The typed `AgentFailure` is
+described in the body rather than returned raw, since it can carry the model's
+own output.
+
+**200 on approve does not mean the CRM accepted the change.** The request
+promised to record the approval and attempt the apply; whether the connector
+took it is in the body, and the proposal survives as `failed` if it did not.
+Approving an already-settled proposal is also a 200, with `applied: false`.
+
 ## Notes for whoever runs this next
 
 **Postgres is on host port 5433, not 5432.** A native PostgreSQL install
@@ -137,29 +209,6 @@ files but not the env file, so after editing `.env` you have to restart
 looks like a code bug.
 
 ## Design decisions
-
-**Errors are values at boundaries.** `pingDb()` returns
-`{ ok: true } | { ok: false, error }` rather than throwing, and the health route
-decides what to log and what to expose. The reason is logged server-side; the
-client gets a status, never a stack trace. Drizzle wraps driver errors, so the
-outer message is only ever `Failed query: select 1` — `describeDbError()` in
-`apps/api/src/db/client.ts` flattens the `cause` chain so one log line is enough
-to diagnose. That is what turned an opaque failure into a diagnosable one when
-the container was losing port 5432 to a native Postgres install.
-
-**The response is parsed on the way out, not just on the way in.**
-`HealthResponseSchema` lives in `packages/shared` and both the API and the web
-app parse against it. Drift between the handler and the contract fails at the
-handler, not in the UI.
-
-**`status` and `db` are enums, not the literal `"ok"`.** A schema that can only
-describe success forces the client to invent its own error shape. SPEC Phase 5
-forbids UI that claims success before the server confirms, and that starts here.
-
-**Routes are built without listening.** `createApp()` returns the Hono app and
-`index.ts` owns the socket, so tests drive the app through `app.request()` with
-no server and no database. Dependencies are injected for the same reason — the
-same seam the agent loop needs in Phase 2 to run against a fake LLM client.
 
 **The LLM provider is configuration, not a dependency.** SPEC Phase 2 already
 requires driving the loop with a fake client, so the interface has to exist
@@ -228,6 +277,36 @@ way.
 `jsonb`, so it arrives as `unknown`, and it began as model output. Trusting it
 because it was valid when written would mean the one component that touches a
 real system runs on unvalidated data.
+
+### Foundations
+
+These came first, in the scaffold, and everything above rests on them. They
+are listed last because they are the least specific to this product, not
+because they matter least — the seams they created are what let the agent
+layer be tested without a model or a database.
+
+**Errors are values at boundaries.** `pingDb()` returns
+`{ ok: true } | { ok: false, error }` rather than throwing, and the health route
+decides what to log and what to expose. The reason is logged server-side; the
+client gets a status, never a stack trace. Drizzle wraps driver errors, so the
+outer message is only ever `Failed query: select 1` — `describeDbError()` in
+`apps/api/src/db/client.ts` flattens the `cause` chain so one log line is enough
+to diagnose. That is what turned an opaque failure into a diagnosable one when
+the container was losing port 5432 to a native Postgres install.
+
+**The response is parsed on the way out, not just on the way in.**
+`HealthResponseSchema` lives in `packages/shared` and both the API and the web
+app parse against it. Drift between the handler and the contract fails at the
+handler, not in the UI.
+
+**`status` and `db` are enums, not the literal `"ok"`.** A schema that can only
+describe success forces the client to invent its own error shape. SPEC Phase 5
+forbids UI that claims success before the server confirms, and that starts here.
+
+**Routes are built without listening.** `createApp()` returns the Hono app and
+`index.ts` owns the socket, so tests drive the app through `app.request()` with
+no server and no database. Dependencies are injected for the same reason — the
+same seam the agent loop needs in Phase 2 to run against a fake LLM client.
 
 ## Tenant isolation: repository layer vs row-level security
 
@@ -398,8 +477,9 @@ sent to the model in one request. There is no chunking and no length check, so
 the failure at some size is a provider error rather than a degraded answer. The
 demo transcripts are a few hundred characters and this has never been hit.
 
-**Extraction and proposal are one call each, with no queue.** `POST /extract`
-holds the HTTP request open for the length of a model call. That is fine for one
+**Extraction and proposal are one call each, with no queue.**
+`POST /api/transcripts/:id/extract` and `POST /api/requirements/:id/propose`
+each hold the HTTP request open for the length of a model call. That is fine for one
 consultant and would not survive ten; it wants a job queue and a polling
 endpoint, and the UI already models "loading" honestly enough to accommodate one.
 
@@ -449,5 +529,3 @@ curl -i -H "X-Tenant-Id: $A_T" -H "X-User-Id: $B_U"      localhost:3001/api/proj
 
 Another tenant's row is indistinguishable from a missing one, deliberately:
 "not found" must not become an existence oracle for other tenants' ids.
-
-
